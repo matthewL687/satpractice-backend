@@ -226,7 +226,7 @@
   displayDiv.innerHTML = '<div class="loading">Generating your practice question...</div>';
 
   try {
-    const resp = await fetch("/api/generate-question", {
+    const resp = await fetch("https://satpractice-backend.vercel.app/api/generate-question", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ section, topic, difficulty })
