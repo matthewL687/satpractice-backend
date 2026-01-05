@@ -81,8 +81,6 @@
     .generate-btn:disabled {
       background: #ccc;
       cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
     }
     .question-container {
       margin-top: 30px;
@@ -117,13 +115,9 @@
 
 <div class="container">
   <div class="sat-practice-container">
-    <h2 style="text-align: center; margin-bottom: 30px;">AI-Powered SAT Practice</h2>
-    <p style="text-align: center; color: #666; margin-bottom: 40px;">
-      Select a section, topic, and difficulty to generate SAT-style practice questions.
-    </p>
 
     <div class="form-group">
-      <label for="section-select">SAT Section</label>
+      <label>SAT Section</label>
       <select id="section-select">
         <option value="">-- Select a Section --</option>
         <option value="reading-writing">Reading and Writing</option>
@@ -132,14 +126,12 @@
     </div>
 
     <div class="form-group">
-      <label for="topic-select">Topic</label>
-      <select id="topic-select" disabled>
-        <option value="">-- Select a Section First --</option>
-      </select>
+      <label>Topic</label>
+      <select id="topic-select" disabled></select>
     </div>
 
     <div class="form-group">
-      <label for="difficulty-select">Difficulty</label>
+      <label>Difficulty</label>
       <select id="difficulty-select">
         <option value="">-- Select Difficulty --</option>
         <option value="Easy">Easy</option>
@@ -148,7 +140,7 @@
       </select>
     </div>
 
-    <button class="generate-btn" onclick="generateQuestion()" disabled id="generate-btn">
+    <button id="generate-btn" class="generate-btn" disabled>
       Generate Practice Question
     </button>
 
@@ -157,82 +149,80 @@
 </div>
 
 <script>
-  const topics = {
-    'reading-writing': [
-      'Craft and Structure',
-      'Information and Ideas',
-      'Standard English Conventions',
-      'Expression of Ideas'
-    ],
-    'math': [
-      'Algebra',
-      'Advanced Math',
-      'Problem-Solving and Data Analysis',
-      'Geometry and Trigonometry'
-    ]
-  };
+const topics = {
+  "reading-writing": [
+    "Craft and Structure",
+    "Information and Ideas",
+    "Standard English Conventions",
+    "Expression of Ideas"
+  ],
+  "math": [
+    "Algebra",
+    "Advanced Math",
+    "Problem-Solving and Data Analysis",
+    "Geometry and Trigonometry"
+  ]
+};
 
-  const sectionSelect = document.getElementById('section-select');
-  const topicSelect = document.getElementById('topic-select');
-  const difficultySelect = document.getElementById('difficulty-select');
-  const generateBtn = document.getElementById('generate-btn');
-  const displayDiv = document.getElementById('question-display');
+const sectionSelect = document.getElementById("section-select");
+const topicSelect = document.getElementById("topic-select");
+const difficultySelect = document.getElementById("difficulty-select");
+const generateBtn = document.getElementById("generate-btn");
+const displayDiv = document.getElementById("question-display");
 
-  sectionSelect.addEventListener('change', updateTopics);
-  topicSelect.addEventListener('change', updateGenerateButton);
-  difficultySelect.addEventListener('change', updateGenerateButton);
+sectionSelect.onchange = () => {
+  const section = sectionSelect.value;
+  topicSelect.innerHTML = "";
 
-  function updateTopics() {
-    const section = sectionSelect.value;
-
-    topicSelect.innerHTML = '<option value="">-- Select a Topic --</option>';
-
-    if (section && topics[section]) {
-      topicSelect.disabled = false;
-      topics[section].forEach(topic => {
-        const option = document.createElement('option');
-        option.value = topic; // send readable topic to backend
-        option.textContent = topic;
-        topicSelect.appendChild(option);
-      });
-    } else {
-      topicSelect.disabled = true;
-      topicSelect.innerHTML = '<option value="">-- Select a Section First --</option>';
-    }
-
-    displayDiv.innerHTML = '';
-    updateGenerateButton();
-  }
-
-  function updateGenerateButton() {
-    const topic = topicSelect.value;
-    const difficulty = difficultySelect.value;
-    generateBtn.disabled = !(topic && difficulty);
-  }
-
-  async function generateQuestion() {
-  const sectionValue = sectionSelect.value;
-  const topic = topicSelect.value;
-  const difficulty = difficultySelect.value;
-
-  if (!sectionValue || !topic || !difficulty) {
-    alert('Please select section, topic, and difficulty.');
+  if (!section) {
+    topicSelect.disabled = true;
+    generateBtn.disabled = true;
     return;
   }
 
-  const section = (sectionValue === "reading-writing") ? "Reading and Writing" : "Math";
+  topicSelect.disabled = false;
+  topics[section].forEach(t => {
+    const o = document.createElement("option");
+    o.value = t;
+    o.textContent = t;
+    topicSelect.appendChild(o);
+  });
 
+  updateButton();
+};
+
+topicSelect.onchange = updateButton;
+difficultySelect.onchange = updateButton;
+
+function updateButton() {
+  generateBtn.disabled = !(topicSelect.value && difficultySelect.value);
+}
+
+generateBtn.onclick = async () => {
   generateBtn.disabled = true;
-  displayDiv.innerHTML = '<div class="loading">Generating your practice question...</div>';
+  displayDiv.innerHTML = `<div class="loading">Generating...</div>`;
 
   try {
-    const resp = await fetch("https://satpractice-backend.vercel.app/api/generate-question", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ section, topic, difficulty })
-    });
+    const resp = await fetch(
+      "https://satpractice-backend.vercel.app/api/generate-question",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section: sectionSelect.value === "reading-writing"
+            ? "Reading and Writing"
+            : "Math",
+          topic: topicSelect.value,
+          difficulty: difficultySelect.value
+        })
+      }
+    );
 
-    const data = await resp.json();
+    const contentType = resp.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await resp.json()
+      : { error: await resp.text() };
+
     if (!resp.ok) throw new Error(data.error || "Request failed");
 
     displayDiv.innerHTML = `
@@ -241,17 +231,17 @@
       </div>
     `;
     displayDiv.querySelector(".question-text").textContent = data.text;
+
   } catch (err) {
     displayDiv.innerHTML = `
-      <div class="question-container">
-        <div class="question-text">Error: ${String(err)}</div>
+      <div class="question-container error">
+        ${String(err)}
       </div>
     `;
   } finally {
     generateBtn.disabled = false;
   }
-}
-
+};
 </script>
 
 </body>
