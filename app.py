@@ -8,11 +8,11 @@ API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
 def generate_sat_question(section: str, topic: str, difficulty: str) -> str:
-    api_key = "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"
+    # ✅ Read the key from environment (never hardcode it)
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
 
-    # Prompt structure based on your original script :contentReference[oaicite:1]{index=1}
     prompt = f"""
 You are an SAT test writer. Create one original SAT-style question from the section "{section}"
 and the topic "{topic}".
@@ -53,15 +53,14 @@ Explanation
 
     r = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=60)
 
-    # Raise helpful error if request fails
-    try:
-        r.raise_for_status()
-    except requests.HTTPError:
+    # Raise helpful error if request fails (don’t leak secrets)
+    if r.status_code >= 400:
         try:
             err = r.json()
         except Exception:
             err = {"raw": r.text}
-        raise RuntimeError(f"OpenAI API error ({r.status_code}): {err}")
+        # Keep it informative but safe
+        raise RuntimeError(f"OpenAI API error ({r.status_code}).")
 
     data = r.json()
 
@@ -74,7 +73,7 @@ Explanation
     try:
         return data["output"][0]["content"][0]["text"]
     except Exception:
-        raise RuntimeError(f"Unexpected response format: {data}")
+        raise RuntimeError("Unexpected response format from OpenAI.")
 
 
 @app.get("/")
@@ -95,6 +94,7 @@ def api_generate_question():
 
     allowed_sections = {"Reading and Writing", "Math"}
     allowed_difficulties = {"Easy", "Medium", "Hard"}
+
     if section not in allowed_sections:
         return jsonify({"error": f"Invalid section: {section}"}), 400
     if difficulty not in allowed_difficulties:
@@ -104,8 +104,10 @@ def api_generate_question():
         text = generate_sat_question(section, topic, difficulty)
         return jsonify({"text": text})
     except Exception as e:
+        # Show message, but avoid dumping raw OpenAI response JSON
         return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
+    # Local dev only
     app.run(host="0.0.0.0", port=5000, debug=True)
