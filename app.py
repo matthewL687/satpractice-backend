@@ -8,7 +8,7 @@ API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
 def generate_sat_question(section: str, topic: str, difficulty: str) -> str:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = "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"
     if not api_key:
         raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
 
