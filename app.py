@@ -7,8 +7,31 @@ app = Flask(__name__, static_folder="static")
 API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
+# ✅ CORS: allow your frontend (GitHub Pages) to call this backend
+@app.after_request
+def add_cors_headers(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"  # you can tighten later
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS, GET"
+    return resp
+
+
+@app.get("/api/debug")
+def debug():
+    """
+    Safe debug endpoint: confirms whether OPENAI_API_KEY is present on Vercel.
+    Does NOT reveal the full key.
+    """
+    key = os.getenv("OPENAI_API_KEY", "")
+    return jsonify({
+        "has_key": bool(key),
+        "prefix": key[:7],
+        "suffix": key[-4:] if len(key) >= 4 else "",
+        "length": len(key),
+    })
+
+
 def generate_sat_question(section: str, topic: str, difficulty: str) -> str:
-    # ✅ Read the key from environment (never hardcode it)
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
@@ -53,14 +76,9 @@ Explanation
 
     r = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=60)
 
-    # Raise helpful error if request fails (don’t leak secrets)
+    # ✅ TEMP DEBUG: include body so you can see the exact OpenAI error
     if r.status_code >= 400:
-        try:
-            err = r.json()
-        except Exception:
-            err = {"raw": r.text}
-        # Keep it informative but safe
-        raise RuntimeError(f"OpenAI API error ({r.status_code}).")
+        raise RuntimeError(f"OpenAI API error ({r.status_code}): {r.text}")
 
     data = r.json()
 
@@ -73,12 +91,17 @@ Explanation
     try:
         return data["output"][0]["content"][0]["text"]
     except Exception:
-        raise RuntimeError("Unexpected response format from OpenAI.")
+        raise RuntimeError(f"Unexpected response format from OpenAI: {data}")
 
 
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
+
+
+@app.route("/api/generate-question", methods=["OPTIONS"])
+def api_generate_question_options():
+    return ("", 204)
 
 
 @app.post("/api/generate-question")
@@ -104,7 +127,6 @@ def api_generate_question():
         text = generate_sat_question(section, topic, difficulty)
         return jsonify({"text": text})
     except Exception as e:
-        # Show message, but avoid dumping raw OpenAI response JSON
         return jsonify({"error": str(e)}), 500
 
 
