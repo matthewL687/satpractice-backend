@@ -198,6 +198,13 @@ function updateButton() {
   generateBtn.disabled = !(topicSelect.value && difficultySelect.value);
 }
 
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
 generateBtn.onclick = async () => {
   generateBtn.disabled = true;
   displayDiv.innerHTML = `<div class="loading">Generating...</div>`;
@@ -218,19 +225,37 @@ generateBtn.onclick = async () => {
       }
     );
 
-    const contentType = resp.headers.get("content-type") || "";
-    const data = contentType.includes("application/json")
-      ? await resp.json()
-      : { error: await resp.text() };
-
+    const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Request failed");
+
+    const fullText = data.text;
+
+    // Split question from answer/explanation
+    const splitIndex = fullText.indexOf("Correct Answer");
+    const questionPart =
+      splitIndex !== -1 ? fullText.slice(0, splitIndex).trim() : fullText;
+    const answerPart =
+      splitIndex !== -1 ? fullText.slice(splitIndex).trim() : "";
 
     displayDiv.innerHTML = `
       <div class="question-container">
-        <div class="question-text"></div>
+        <div class="question-text">${escapeHtml(questionPart)}</div>
+
+        <button id="reveal-btn" class="generate-btn" style="margin-top:20px;">
+          Show Answer & Explanation
+        </button>
+
+        <div id="answer-section" style="display:none; margin-top:20px;">
+          <hr />
+          <div class="question-text">${escapeHtml(answerPart)}</div>
+        </div>
       </div>
     `;
-    displayDiv.querySelector(".question-text").textContent = data.text;
+
+    document.getElementById("reveal-btn").onclick = () => {
+      document.getElementById("answer-section").style.display = "block";
+      document.getElementById("reveal-btn").style.display = "none";
+    };
 
   } catch (err) {
     displayDiv.innerHTML = `
