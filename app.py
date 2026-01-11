@@ -4,10 +4,12 @@ from flask import Flask, request, jsonify, send_from_directory
 
 app = Flask(__name__, static_folder="static")
 
-API_ENDPOINT = "https://api.openai.com/v1/responses"
+OPENAI_API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
-# ✅ Robust CORS (echo Origin for best browser compatibility)
+# =========================
+# CORS (robust + safe)
+# =========================
 @app.after_request
 def add_cors_headers(resp):
     origin = request.headers.get("Origin")
@@ -23,31 +25,44 @@ def add_cors_headers(resp):
     return resp
 
 
-# ✅ Universal preflight handler for any /api/* route
+# Universal OPTIONS handler
 @app.route("/api/<path:_>", methods=["OPTIONS"])
 def api_preflight(_):
     return ("", 204)
 
 
+# =========================
+# Debug endpoints
+# =========================
 @app.get("/api/debug")
 def debug():
-    """
-    Safe debug endpoint: confirms whether OPENAI_API_KEY is present.
-    Does NOT reveal the full key.
-    """
     key = os.getenv("OPENAI_API_KEY", "")
     return jsonify({
         "has_key": bool(key),
+        "length": len(key),
         "prefix": key[:7],
         "suffix": key[-4:] if len(key) >= 4 else "",
-        "length": len(key),
     })
 
 
+@app.get("/api/whereami")
+def whereami():
+    return jsonify({
+        "host": request.headers.get("Host"),
+        "origin": request.headers.get("Origin"),
+        "x_vercel_id": request.headers.get("X-Vercel-Id"),
+        "x_forwarded_host": request.headers.get("X-Forwarded-Host"),
+        "x_forwarded_proto": request.headers.get("X-Forwarded-Proto"),
+    })
+
+
+# =========================
+# Core logic
+# =========================
 def generate_sat_question(section: str, topic: str, difficulty: str) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise RuntimeError("Missing OPENAI_API_KEY environment variable.")
+        raise RuntimeError("Missing OPENAI_API_KEY")
 
     prompt = f"""
 You are an SAT test writer. Create one original SAT-style question from the section "{section}"
@@ -55,18 +70,12 @@ and the topic "{topic}".
 
 Difficulty level: {difficulty}
 
-Difficulty guidelines:
-- Easy: Straightforward wording, minimal traps, clear answer choice.
-- Medium: Moderate complexity, plausible distractors, some reasoning required.
-- Hard: Subtle distinctions, close answer choices, deeper reasoning required.
-
 Requirements:
-- The question should match official SAT style and tone.
-- Provide exactly 4 answer choices (A–D).
-- Clearly indicate the correct answer.
-- Include a step-by-step explanation justifying why the correct answer is correct
-  and why the others are incorrect.
-- Use clear, concise language appropriate for high school students.
+- SAT style and tone
+- Exactly 4 answer choices (A–D)
+- Clearly mark the correct answer
+- Step-by-step explanation
+- Clear, concise language
 
 Output format:
 Question
@@ -83,34 +92,34 @@ Explanation
     payload = {
         "model": "gpt-4.1-mini",
         "input": prompt,
-        # ✅ reduce a bit to avoid timeouts on serverless
-        "max_output_tokens": 750,
+        "max_output_tokens": 450,
         "temperature": 0.5,
     }
 
-    r = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=60)
+    r = requests.post(
+        OPENAI_API_ENDPOINT,
+        headers=headers,
+        json=payload,
+        timeout=60
+    )
 
     if r.status_code >= 400:
         raise RuntimeError(f"OpenAI API error ({r.status_code}): {r.text}")
 
     data = r.json()
 
-    text = data.get("output_text")
-    if text:
-        return text
+    if "output_text" in data:
+        return data["output_text"]
 
     try:
         return data["output"][0]["content"][0]["text"]
     except Exception:
-        raise RuntimeError(f"Unexpected response format from OpenAI: {data}")
+        raise RuntimeError(f"Unexpected OpenAI response: {data}")
 
 
-@app.get("/")
-def index():
-    return send_from_directory(app.static_folder, "index.html")
-
-
-# ✅ Handle both POST and OPTIONS on the same route
+# =========================
+# API route
+# =========================
 @app.route("/api/generate-question", methods=["POST", "OPTIONS"])
 def api_generate_question():
     if request.method == "OPTIONS":
@@ -125,12 +134,10 @@ def api_generate_question():
     if not section or not topic or not difficulty:
         return jsonify({"error": "Missing section/topic/difficulty"}), 400
 
-    allowed_sections = {"Reading and Writing", "Math"}
-    allowed_difficulties = {"Easy", "Medium", "Hard"}
-
-    if section not in allowed_sections:
+    if section not in {"Reading and Writing", "Math"}:
         return jsonify({"error": f"Invalid section: {section}"}), 400
-    if difficulty not in allowed_difficulties:
+
+    if difficulty not in {"Easy", "Medium", "Hard"}:
         return jsonify({"error": f"Invalid difficulty: {difficulty}"}), 400
 
     try:
@@ -140,5 +147,14 @@ def api_generate_question():
         return jsonify({"error": str(e)}), 500
 
 
+# =========================
+# Frontend
+# =========================
+@app.get("/")
+def index():
+    return send_from_directory("static", "index.html")
+
+
+# Local dev only
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
