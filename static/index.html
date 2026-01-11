@@ -75,12 +75,6 @@
     }
     .generate-btn:hover {
       background: #000;
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    }
-    .generate-btn:disabled {
-      background: #ccc;
-      cursor: not-allowed;
     }
     .question-container {
       margin-top: 30px;
@@ -92,7 +86,6 @@
     .question-text {
       white-space: pre-wrap;
       line-height: 1.8;
-      font-size: 1.05rem;
     }
     .loading {
       text-align: center;
@@ -103,6 +96,16 @@
     .error {
       color: #b00020;
       font-weight: 600;
+    }
+    #diag {
+      margin-top: 30px;
+      padding: 20px;
+      background: #111;
+      color: #0f0;
+      font-family: monospace;
+      white-space: pre-wrap;
+      border-radius: 6px;
+      font-size: 0.9rem;
     }
   </style>
 </head>
@@ -145,10 +148,16 @@
     </button>
 
     <div id="question-display"></div>
+
+    <!-- 🔍 Diagnostics panel -->
+    <div id="diag"></div>
+
   </div>
 </div>
 
 <script>
+const API_BASE = "https://satpractice-coral.vercel.app";
+
 const topics = {
   "reading-writing": [
     "Craft and Structure",
@@ -169,105 +178,73 @@ const topicSelect = document.getElementById("topic-select");
 const difficultySelect = document.getElementById("difficulty-select");
 const generateBtn = document.getElementById("generate-btn");
 const displayDiv = document.getElementById("question-display");
+const diagDiv = document.getElementById("diag");
 
 sectionSelect.onchange = () => {
-  const section = sectionSelect.value;
   topicSelect.innerHTML = "";
-
-  if (!section) {
-    topicSelect.disabled = true;
-    generateBtn.disabled = true;
-    return;
-  }
-
-  topicSelect.disabled = false;
-  topics[section].forEach(t => {
+  if (!sectionSelect.value) return;
+  topics[sectionSelect.value].forEach(t => {
     const o = document.createElement("option");
     o.value = t;
     o.textContent = t;
     topicSelect.appendChild(o);
   });
-
-  updateButton();
+  generateBtn.disabled = false;
 };
 
-topicSelect.onchange = updateButton;
-difficultySelect.onchange = updateButton;
-
-function updateButton() {
-  generateBtn.disabled = !(topicSelect.value && difficultySelect.value);
+function escapeHtml(str) {
+  return str.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
 }
 
-function escapeHtml(str) {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+async function runDiagnostics() {
+  const lines = [];
+  lines.push(`href: ${location.href}`);
+  lines.push(`origin: ${location.origin}`);
+
+  try {
+    const r = await fetch(`${API_BASE}/api/debug`, { cache: "no-store" });
+    const j = await r.json();
+    lines.push(`/api/debug status: ${r.status}`);
+    lines.push(JSON.stringify(j));
+  } catch (e) {
+    lines.push(`/api/debug ERROR: ${String(e)}`);
+  }
+
+  try {
+    const r = await fetch(`${API_BASE}/api/generate-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ section:"Math", topic:"Algebra", difficulty:"Medium" })
+    });
+    lines.push(`/api/generate-question status: ${r.status}`);
+  } catch (e) {
+    lines.push(`/api/generate-question ERROR: ${String(e)}`);
+  }
+
+  diagDiv.textContent = lines.join("\n");
 }
 
 generateBtn.onclick = async () => {
-  generateBtn.disabled = true;
   displayDiv.innerHTML = `<div class="loading">Generating...</div>`;
-
   try {
-    const resp = await fetch(
-      "https://satpractice-coral.vercel.app/api/generate-question",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          section: sectionSelect.value === "reading-writing"
-            ? "Reading and Writing"
-            : "Math",
-          topic: topicSelect.value,
-          difficulty: difficultySelect.value
-        })
-      }
-    );
-
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Request failed");
-
-    const fullText = data.text;
-
-    // Split question from answer/explanation
-    const splitIndex = fullText.indexOf("Correct Answer");
-    const questionPart =
-      splitIndex !== -1 ? fullText.slice(0, splitIndex).trim() : fullText;
-    const answerPart =
-      splitIndex !== -1 ? fullText.slice(splitIndex).trim() : "";
-
-    displayDiv.innerHTML = `
-      <div class="question-container">
-        <div class="question-text">${escapeHtml(questionPart)}</div>
-
-        <button id="reveal-btn" class="generate-btn" style="margin-top:20px;">
-          Show Answer & Explanation
-        </button>
-
-        <div id="answer-section" style="display:none; margin-top:20px;">
-          <hr />
-          <div class="question-text">${escapeHtml(answerPart)}</div>
-        </div>
-      </div>
-    `;
-
-    document.getElementById("reveal-btn").onclick = () => {
-      document.getElementById("answer-section").style.display = "block";
-      document.getElementById("reveal-btn").style.display = "none";
-    };
-
-  } catch (err) {
-    displayDiv.innerHTML = `
-      <div class="question-container error">
-        ${String(err)}
-      </div>
-    `;
-  } finally {
-    generateBtn.disabled = false;
+    const r = await fetch(`${API_BASE}/api/generate-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        section: sectionSelect.value === "reading-writing" ? "Reading and Writing" : "Math",
+        topic: topicSelect.value,
+        difficulty: difficultySelect.value
+      })
+    });
+    const j = await r.json();
+    displayDiv.innerHTML = `<div class="question-container"><div class="question-text">${escapeHtml(j.text)}</div></div>`;
+  } catch (e) {
+    displayDiv.innerHTML = `<div class="error">${String(e)}</div>`;
   }
 };
-</script>
 
+window.addEventListener("load", runDiagnostics);
+</script>
 </body>
 </html>
