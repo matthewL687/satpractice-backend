@@ -18,12 +18,12 @@
     .form-group label { display:block; font-weight:600; margin-bottom:8px; font-size:1rem; }
     .form-group select { width:100%; padding:12px; border:1px solid #ddd; border-radius:4px; font-family:'Merriweather',serif; font-size:1rem; }
     .generate-btn { background:#2a2a2a; color:white; padding:15px 40px; border:none; border-radius:4px; font-family:'Libre Baskerville',serif; font-size:1.1rem; cursor:pointer; transition:.2s; width:100%; }
-    .generate-btn:hover { background:#000; }
+    .generate-btn:hover { background:#000; transform: translateY(-1px); }
+    .generate-btn:disabled { background:#ccc; cursor:not-allowed; transform:none; }
     .question-container { margin-top:30px; padding:30px; background:#f9f9f9; border-radius:8px; border:1px solid #e5e5e5; }
-    .question-text { white-space:pre-wrap; line-height:1.8; }
+    .question-text { white-space:pre-wrap; line-height:1.8; font-size:1.05rem; }
     .loading { text-align:center; padding:40px; font-style:italic; color:#666; }
     .error { color:#b00020; font-weight:600; }
-    #diag { margin-top:30px; padding:20px; background:#111; color:#0f0; font-family:monospace; white-space:pre-wrap; border-radius:6px; font-size:.9rem; }
   </style>
 </head>
 
@@ -65,18 +65,14 @@
     </button>
 
     <div id="question-display"></div>
-
-    <!-- 🔍 Diagnostics panel -->
-    <div id="diag"></div>
-
   </div>
 </div>
 
 <script>
 /**
- * ✅ Smart API base:
- * - On GitHub Pages: call your Vercel backend
- * - On Vercel (coral or any deployment URL): call same-origin (/api/...)
+ * Smart API base:
+ * - On GitHub Pages -> call Vercel backend
+ * - On Vercel -> call same-origin (/api/...)
  */
 const API_BASE = location.hostname.endsWith("github.io")
   ? "https://satpractice-coral.vercel.app"
@@ -102,64 +98,51 @@ const topicSelect = document.getElementById("topic-select");
 const difficultySelect = document.getElementById("difficulty-select");
 const generateBtn = document.getElementById("generate-btn");
 const displayDiv = document.getElementById("question-display");
-const diagDiv = document.getElementById("diag");
 
 sectionSelect.onchange = () => {
+  const section = sectionSelect.value;
   topicSelect.innerHTML = "";
-  if (!sectionSelect.value) return;
 
-  topics[sectionSelect.value].forEach(t => {
+  if (!section) {
+    topicSelect.disabled = true;
+    generateBtn.disabled = true;
+    return;
+  }
+
+  topicSelect.disabled = false;
+  topics[section].forEach(t => {
     const o = document.createElement("option");
     o.value = t;
     o.textContent = t;
     topicSelect.appendChild(o);
   });
 
-  topicSelect.disabled = false;
-  generateBtn.disabled = false;
+  updateButton();
 };
 
-function escapeHtml(str) {
-  return str.replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+topicSelect.onchange = updateButton;
+difficultySelect.onchange = updateButton;
+
+function updateButton() {
+  generateBtn.disabled = !(topicSelect.value && difficultySelect.value);
 }
 
-async function runDiagnostics() {
-  const lines = [];
-  lines.push(`href: ${location.href}`);
-  lines.push(`origin: ${location.origin}`);
-  lines.push(`API_BASE: ${API_BASE || "(same-origin)"}`);
-
-  try {
-    const r = await fetch(`${API_BASE}/api/debug`, { cache: "no-store" });
-    const j = await r.json();
-    lines.push(`/api/debug status: ${r.status}`);
-    lines.push(JSON.stringify(j));
-  } catch (e) {
-    lines.push(`/api/debug ERROR: ${String(e)}`);
-  }
-
-  try {
-    const r = await fetch(`${API_BASE}/api/generate-question`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      cache: "no-store",
-      body: JSON.stringify({ section:"Math", topic:"Algebra", difficulty:"Medium" })
-    });
-    lines.push(`/api/generate-question status: ${r.status}`);
-  } catch (e) {
-    lines.push(`/api/generate-question ERROR: ${String(e)}`);
-  }
-
-  diagDiv.textContent = lines.join("\n");
+function escapeHtml(str) {
+  return str
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 generateBtn.onclick = async () => {
+  generateBtn.disabled = true;
   displayDiv.innerHTML = `<div class="loading">Generating...</div>`;
 
   try {
-    const r = await fetch(`${API_BASE}/api/generate-question`, {
+    const resp = await fetch(`${API_BASE}/api/generate-question`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      cache: "no-store",
       body: JSON.stringify({
         section: sectionSelect.value === "reading-writing" ? "Reading and Writing" : "Math",
         topic: topicSelect.value,
@@ -167,17 +150,51 @@ generateBtn.onclick = async () => {
       })
     });
 
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+    const contentType = resp.headers.get("content-type") || "";
+    const data = contentType.includes("application/json")
+      ? await resp.json()
+      : { error: await resp.text() };
 
-    displayDiv.innerHTML =
-      `<div class="question-container"><div class="question-text">${escapeHtml(j.text)}</div></div>`;
-  } catch (e) {
-    displayDiv.innerHTML = `<div class="question-container error">${String(e)}</div>`;
+    if (!resp.ok) throw new Error(data.error || `Request failed (${resp.status})`);
+
+    const fullText = data.text || "";
+
+    // Split question from answer/explanation
+    const splitIndex = fullText.indexOf("Correct Answer");
+    const questionPart = splitIndex !== -1 ? fullText.slice(0, splitIndex).trim() : fullText.trim();
+    const answerPart = splitIndex !== -1 ? fullText.slice(splitIndex).trim() : "";
+
+    displayDiv.innerHTML = `
+      <div class="question-container">
+        <div class="question-text">${escapeHtml(questionPart)}</div>
+
+        <button id="reveal-btn" class="generate-btn" style="margin-top:20px;">
+          Show Answer & Explanation
+        </button>
+
+        <div id="answer-section" style="display:none; margin-top:20px;">
+          <hr />
+          <div class="question-text">${escapeHtml(answerPart || "No answer/explanation found in output.")}</div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("reveal-btn").onclick = () => {
+      document.getElementById("answer-section").style.display = "block";
+      document.getElementById("reveal-btn").style.display = "none";
+    };
+
+  } catch (err) {
+    displayDiv.innerHTML = `
+      <div class="question-container error">
+        ${escapeHtml(String(err))}
+      </div>
+    `;
+  } finally {
+    generateBtn.disabled = false;
   }
 };
-
-window.addEventListener("load", runDiagnostics);
 </script>
+
 </body>
 </html>
