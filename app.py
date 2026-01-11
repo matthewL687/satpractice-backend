@@ -84,7 +84,7 @@ Explanation
         "model": "gpt-4.1-mini",
         "input": prompt,
         # ✅ reduce a bit to avoid timeouts on serverless
-        "max_output_tokens": 450,
+        "max_output_tokens": 750,
         "temperature": 0.5,
     }
 
