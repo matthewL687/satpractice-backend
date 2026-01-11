@@ -7,19 +7,20 @@ app = Flask(__name__, static_folder="static")
 API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
-# ✅ CORS: allow your frontend (GitHub Pages) to call this backend
+# ✅ Robust CORS for cross-origin POSTs (GitHub Pages -> Vercel backend)
 @app.after_request
 def add_cors_headers(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"  # you can tighten later
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS, GET"
+    resp.headers["Access-Control-Allow-Origin"] = "*"  # tighten later if you want
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
 
 
 @app.get("/api/debug")
 def debug():
     """
-    Safe debug endpoint: confirms whether OPENAI_API_KEY is present on Vercel.
+    Safe debug endpoint: confirms whether OPENAI_API_KEY is present.
     Does NOT reveal the full key.
     """
     key = os.getenv("OPENAI_API_KEY", "")
@@ -99,13 +100,12 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
-@app.route("/api/generate-question", methods=["OPTIONS"])
-def api_generate_question_options():
-    return ("", 204)
-
-
-@app.post("/api/generate-question")
+# ✅ ONE route handles BOTH preflight and POST (fixes "Failed to fetch")
+@app.route("/api/generate-question", methods=["POST", "OPTIONS"])
 def api_generate_question():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
     body = request.get_json(silent=True) or {}
 
     section = (body.get("section") or "").strip()
