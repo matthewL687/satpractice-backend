@@ -7,14 +7,26 @@ app = Flask(__name__, static_folder="static")
 API_ENDPOINT = "https://api.openai.com/v1/responses"
 
 
-# ✅ Robust CORS for cross-origin POSTs (GitHub Pages -> Vercel backend)
+# ✅ Robust CORS (echo Origin for best browser compatibility)
 @app.after_request
 def add_cors_headers(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"  # tighten later if you want
+    origin = request.headers.get("Origin")
+    if origin:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
+    else:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     resp.headers["Access-Control-Max-Age"] = "86400"
     return resp
+
+
+# ✅ Universal preflight handler for any /api/* route
+@app.route("/api/<path:_>", methods=["OPTIONS"])
+def api_preflight(_):
+    return ("", 204)
 
 
 @app.get("/api/debug")
@@ -71,24 +83,22 @@ Explanation
     payload = {
         "model": "gpt-4.1-mini",
         "input": prompt,
-        "max_output_tokens": 750,
+        # ✅ reduce a bit to avoid timeouts on serverless
+        "max_output_tokens": 450,
         "temperature": 0.5,
     }
 
     r = requests.post(API_ENDPOINT, headers=headers, json=payload, timeout=60)
 
-    # ✅ TEMP DEBUG: include body so you can see the exact OpenAI error
     if r.status_code >= 400:
         raise RuntimeError(f"OpenAI API error ({r.status_code}): {r.text}")
 
     data = r.json()
 
-    # Prefer stable shortcut when present
     text = data.get("output_text")
     if text:
         return text
 
-    # Fallback to nested format
     try:
         return data["output"][0]["content"][0]["text"]
     except Exception:
@@ -100,7 +110,7 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
-# ✅ ONE route handles BOTH preflight and POST (fixes "Failed to fetch")
+# ✅ Handle both POST and OPTIONS on the same route
 @app.route("/api/generate-question", methods=["POST", "OPTIONS"])
 def api_generate_question():
     if request.method == "OPTIONS":
@@ -131,5 +141,4 @@ def api_generate_question():
 
 
 if __name__ == "__main__":
-    # Local dev only
     app.run(host="0.0.0.0", port=5000, debug=True)
