@@ -7,22 +7,26 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- MathJax -->
+<!-- ✅ MathJax (robust CHTML build) -->
 <script>
   window.MathJax = {
     tex: {
       inlineMath: [['$', '$']],
       displayMath: [['$$', '$$']]
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
     }
   };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 
 <style>
 body {
   margin: 0;
   font-family: 'Merriweather', serif;
   background: #fafafa;
+  color: #2a2a2a;
 }
 header {
   text-align: center;
@@ -31,7 +35,7 @@ header {
   border-bottom: 1px solid #eee;
 }
 .container {
-  max-width: 850px;
+  max-width: 900px;
   margin: 40px auto;
 }
 .card {
@@ -44,6 +48,7 @@ select, button {
   width: 100%;
   padding: 12px;
   margin-top: 12px;
+  font-family: 'Merriweather', serif;
 }
 button {
   background: #2a2a2a;
@@ -57,13 +62,15 @@ button:disabled {
 .question-text {
   white-space: pre-wrap;
   line-height: 1.7;
+  font-size: 1.05rem;
 }
 .choice {
   border: 1px solid #ddd;
   border-radius: 6px;
-  padding: 14px;
+  padding: 14px 16px;
   margin: 12px 0;
   cursor: pointer;
+  transition: 0.15s;
 }
 .choice:hover {
   background: #f0f0f0;
@@ -76,6 +83,11 @@ button:disabled {
   background: #fdecea;
   border-color: #c62828;
 }
+.loading {
+  text-align: center;
+  font-style: italic;
+  color: #666;
+}
 </style>
 </head>
 
@@ -87,6 +99,7 @@ button:disabled {
 
 <div class="container">
   <div class="card">
+
     <select id="section">
       <option value="">Select Section</option>
       <option value="Reading and Writing">Reading and Writing</option>
@@ -110,6 +123,7 @@ button:disabled {
     <button id="generate">Generate Question</button>
 
     <div id="output" style="margin-top:30px;"></div>
+
   </div>
 </div>
 
@@ -118,11 +132,11 @@ const API_ORIGIN = location.origin;
 const output = document.getElementById("output");
 
 document.getElementById("generate").onclick = async () => {
-  output.innerHTML = "Generating...";
+  output.innerHTML = `<div class="loading">Generating…</div>`;
 
   const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       section: section.value,
       topic: topic.value,
@@ -130,12 +144,13 @@ document.getElementById("generate").onclick = async () => {
     })
   });
 
-  const { text } = await resp.json();
+  const data = await resp.json();
+  const text = data.text || "";
 
-  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)[1].trim();
-  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)[1].trim();
-  const c = text.match(/Correct Answer:\s*([A-D])/)[1];
-  const e = text.match(/Explanation:\s*([\s\S]*)$/)[1].trim();
+  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)?.[1]?.trim() || "";
+  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)?.[1]?.trim() || "";
+  const c = text.match(/Correct Answer:\s*([A-D])/)?.[1] || "";
+  const e = text.match(/Explanation:\s*([\s\S]*)$/)?.[1]?.trim() || "";
 
   const choices = a.split(/\n(?=[A-D]\.)/).map(s => ({
     letter: s[0],
@@ -144,32 +159,45 @@ document.getElementById("generate").onclick = async () => {
 
   output.innerHTML = `
     <div class="question-text">${q}</div>
-    ${choices.map(x => `
-      <div class="choice" data-l="${x.letter}">
-        <strong>${x.letter}.</strong> ${x.text}
+
+    ${choices.map(ch => `
+      <div class="choice" data-letter="${ch.letter}">
+        <strong>${ch.letter}.</strong> ${ch.text}
       </div>
     `).join("")}
-    <div id="explanation" style="display:none;margin-top:20px;">
-      <hr>
-      <strong>Correct Answer:</strong> ${c}<br><br>
-      ${e}
+
+    <div id="explanation" style="display:none; margin-top:20px;">
+      <hr />
+      <div class="question-text">
+        <strong>Correct Answer:</strong> ${c}<br><br>
+        ${e}
+      </div>
     </div>
   `;
 
-  document.querySelectorAll(".choice").forEach(el => {
-    el.onclick = () => {
-      document.querySelectorAll(".choice").forEach(c2 => {
-        c2.style.pointerEvents = "none";
-        c2.classList.add(
-          c2.dataset.l === c ? "correct" : "incorrect"
+  // 🔁 Force MathJax render
+  if (window.MathJax) {
+    MathJax.typesetClear();
+    MathJax.typesetPromise([output]);
+  }
+
+  document.querySelectorAll(".choice").forEach(choice => {
+    choice.onclick = () => {
+      document.querySelectorAll(".choice").forEach(el => {
+        el.style.pointerEvents = "none";
+        el.classList.add(
+          el.dataset.letter === c ? "correct" : "incorrect"
         );
       });
-      document.getElementById("explanation").style.display = "block";
-      MathJax.typesetPromise();
+
+      const expl = document.getElementById("explanation");
+      expl.style.display = "block";
+
+      if (window.MathJax) {
+        MathJax.typesetPromise([expl]);
+      }
     };
   });
-
-  MathJax.typesetPromise();
 };
 </script>
 
