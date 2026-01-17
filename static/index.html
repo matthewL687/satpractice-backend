@@ -7,7 +7,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- ✅ MathJax (manual typeset) -->
+<!-- ✅ MathJax (manual typeset, reliable) -->
 <script>
   window.MathJax = {
     tex: {
@@ -100,14 +100,12 @@ button:disabled {
 </head>
 
 <body>
-
 <header>
   <h1>SAT Practice</h1>
 </header>
 
 <div class="container">
   <div class="card">
-
     <select id="section">
       <option value="">Select Section</option>
       <option value="Reading and Writing">Reading and Writing</option>
@@ -131,11 +129,11 @@ button:disabled {
     <button id="generate">Generate Question</button>
 
     <div id="output" style="margin-top:30px;"></div>
-
   </div>
 </div>
 
 <script>
+const API_ORIGIN = location.origin;
 const output = document.getElementById("output");
 const btn = document.getElementById("generate");
 
@@ -148,36 +146,32 @@ function parseModelText(text) {
   const choices = a
     .split(/\n(?=[A-D]\.)/)
     .map(s => ({ letter: s[0], text: s.slice(2).trim() }))
-    .filter(x => x.letter && x.text);
+    .filter(ch => ch.letter && ch.text);
 
   return { q, choices, c, e };
 }
 
 async function typeset(nodes) {
   if (!window.MathJax) return;
-  await MathJax.startup.promise;       // ✅ ensure MathJax ready
+  await MathJax.startup.promise;     // ✅ wait until MathJax ready
   MathJax.typesetClear(nodes);
-  await MathJax.typesetPromise(nodes); // ✅ render
+  await MathJax.typesetPromise(nodes);
 }
 
 btn.onclick = async () => {
   btn.disabled = true;
 
-  // safe loading UI (fine to use innerHTML here since no LaTeX in it)
+  // loading can be innerHTML (no LaTeX here)
   output.innerHTML = `<div class="loading">Generating…</div>`;
 
   try {
-    const sectionEl = document.getElementById("section");
-    const topicEl = document.getElementById("topic");
-    const difficultyEl = document.getElementById("difficulty");
-
-    const resp = await fetch(`/api/generate-question`, {
+    const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        section: sectionEl.value,
-        topic: topicEl.value,
-        difficulty: difficultyEl.value
+        section: document.getElementById("section").value,
+        topic: document.getElementById("topic").value,
+        difficulty: document.getElementById("difficulty").value
       })
     });
 
@@ -187,15 +181,18 @@ btn.onclick = async () => {
     const text = data.text || "";
     const { q, choices, c, e } = parseModelText(text);
 
-    // ✅ Build output WITHOUT innerHTML for LaTeX-containing parts
+    // ✅ Build DOM safely: use textContent for LaTeX
     output.replaceChildren();
 
+    // Question
     const qDiv = document.createElement("div");
     qDiv.className = "question-text";
     qDiv.textContent = q;
     output.appendChild(qDiv);
 
-    const choiceEls = choices.map(ch => {
+    // Choices
+    const choiceEls = [];
+    for (const ch of choices) {
       const div = document.createElement("div");
       div.className = "choice";
       div.dataset.letter = ch.letter;
@@ -209,9 +206,10 @@ btn.onclick = async () => {
       div.appendChild(span);
 
       output.appendChild(div);
-      return div;
-    });
+      choiceEls.push(div);
+    }
 
+    // Explanation (hidden)
     const expl = document.createElement("div");
     expl.id = "explanation";
     expl.style.display = "none";
@@ -227,15 +225,15 @@ btn.onclick = async () => {
 
     output.appendChild(expl);
 
-    // ✅ typeset question + choices now that they exist
+    // ✅ Render LaTeX in question + choices
     await typeset([output]);
 
-    // click handlers (reveal explanation, grade choices)
-    choiceEls.forEach(el => {
-      el.onclick = async () => {
-        choiceEls.forEach(x => {
-          x.style.pointerEvents = "none";
-          x.classList.add(x.dataset.letter === c ? "correct" : "incorrect");
+    // Click behavior (grade + reveal explanation)
+    choiceEls.forEach(choiceEl => {
+      choiceEl.onclick = async () => {
+        choiceEls.forEach(el => {
+          el.style.pointerEvents = "none";
+          el.classList.add(el.dataset.letter === c ? "correct" : "incorrect");
         });
 
         expl.style.display = "block";
