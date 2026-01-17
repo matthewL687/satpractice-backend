@@ -1,3 +1,4 @@
+# app.py
 import os
 import requests
 from flask import Flask, request, jsonify, send_from_directory
@@ -27,6 +28,34 @@ def api_preflight(_):
 # =========================
 # Core logic
 # =========================
+def _extract_response_text(data: dict) -> str:
+    """
+    Robustly extract text from the Responses API payload.
+    Works across different response shapes.
+    """
+    if isinstance(data, dict) and isinstance(data.get("output_text"), str) and data["output_text"].strip():
+        return data["output_text"]
+
+    out = data.get("output")
+    if isinstance(out, list):
+        chunks = []
+        for item in out:
+            content = item.get("content") if isinstance(item, dict) else None
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if not isinstance(c, dict):
+                    continue
+                # Common shapes: {"type":"output_text","text":"..."} or {"text":"..."}
+                if isinstance(c.get("text"), str):
+                    chunks.append(c["text"])
+        text = "\n".join(chunks).strip()
+        if text:
+            return text
+
+    raise RuntimeError("Could not extract text from model response.")
+
+
 def generate_sat_question(section: str, topic: str, difficulty: str) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
@@ -46,6 +75,7 @@ STRICT REQUIREMENTS:
 - Use $...$ for inline math and $$...$$ for displayed equations
 - Do NOT use HTML
 - Do NOT explain LaTeX formatting
+- Do not include any extra headings or text outside the specified format
 
 Output format (plain text only):
 
@@ -88,11 +118,7 @@ Explanation:
         raise RuntimeError(r.text)
 
     data = r.json()
-
-    if "output_text" in data:
-        return data["output_text"]
-
-    return data["output"][0]["content"][0]["text"]
+    return _extract_response_text(data)
 
 
 # =========================
@@ -102,9 +128,9 @@ Explanation:
 def api_generate_question():
     body = request.get_json() or {}
 
-    section = body.get("section", "").strip()
-    topic = body.get("topic", "").strip()
-    difficulty = body.get("difficulty", "").strip()
+    section = (body.get("section") or "").strip()
+    topic = (body.get("topic") or "").strip()
+    difficulty = (body.get("difficulty") or "").strip()
 
     if not section or not topic or not difficulty:
         return jsonify({"error": "Missing fields"}), 400
@@ -117,11 +143,17 @@ def api_generate_question():
 
 
 # =========================
-# Frontend
+# Frontend / static
 # =========================
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+@app.get("/<path:path>")
+def static_proxy(path):
+    # optional: serve any other static files you add later
+    return send_from_directory("static", path)
 
 
 if __name__ == "__main__":
