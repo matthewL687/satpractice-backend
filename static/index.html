@@ -5,37 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>SAT Practice</title>
 
-<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- MathJax -->
+<!-- ✅ MathJax (manual typeset) -->
 <script>
-window.MathJax = {
-  tex: {
-    inlineMath: [['$', '$']],
-    displayMath: [['$$', '$$']]
-  },
-  startup: { typeset: false }
-};
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$']],
+      displayMath: [['$$', '$$']]
+    },
+    options: {
+      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+    },
+    startup: { typeset: false }
+  };
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 
 <style>
-body { font-family: Merriweather, serif; background:#fafafa; margin:0 }
-.container { max-width:900px; margin:40px auto }
-.card { background:#fff; padding:40px; border-radius:8px; border:1px solid #ddd }
-button { width:100%; padding:14px; margin-top:16px; background:#222; color:#fff; border:none }
-.choice { border:1px solid #ddd; padding:14px; margin-top:10px; cursor:pointer }
-.correct { background:#e8f5e9 }
-.incorrect { background:#fdecea }
-.question-text { white-space:pre-wrap; line-height:1.7 }
+body {
+  margin: 0;
+  font-family: 'Merriweather', serif;
+  background: #fafafa;
+  color: #2a2a2a;
+}
+header {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-bottom: 1px solid #eee;
+}
+.container {
+  max-width: 900px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+.card {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+select, button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+  font-family: 'Merriweather', serif;
+}
+button {
+  background: #2a2a2a;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+.question-text {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 1.05rem;
+}
+.choice {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin: 12px 0;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.choice:hover { background: #f0f0f0; }
+.choice.correct {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+}
+.choice.incorrect {
+  background: #fdecea;
+  border-color: #c62828;
+}
+.loading {
+  text-align: center;
+  font-style: italic;
+  color: #666;
+}
+.error {
+  border: 1px solid #f3b0b0;
+  background: #fff3f3;
+  padding: 14px 16px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
 </style>
 </head>
 
 <body>
+
+<header>
+  <h1>SAT Practice</h1>
+</header>
+
 <div class="container">
   <div class="card">
+
+    <select id="section">
+      <option value="">Select Section</option>
+      <option value="Reading and Writing">Reading and Writing</option>
+      <option value="Math">Math</option>
+    </select>
+
+    <select id="topic">
+      <option value="">Select Topic</option>
+      <option>Algebra</option>
+      <option>Advanced Math</option>
+      <option>Problem-Solving and Data Analysis</option>
+      <option>Geometry and Trigonometry</option>
+    </select>
+
+    <select id="difficulty">
+      <option>Easy</option>
+      <option selected>Medium</option>
+      <option>Hard</option>
+    </select>
+
     <button id="generate">Generate Question</button>
+
     <div id="output" style="margin-top:30px;"></div>
+
   </div>
 </div>
 
@@ -43,73 +139,121 @@ button { width:100%; padding:14px; margin-top:16px; background:#222; color:#fff;
 const output = document.getElementById("output");
 const btn = document.getElementById("generate");
 
-async function typeset(node) {
-  await MathJax.startup.promise;
-  MathJax.typesetClear([node]);
-  await MathJax.typesetPromise([node]);
+function parseModelText(text) {
+  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)?.[1]?.trim() || "";
+  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)?.[1]?.trim() || "";
+  const c = text.match(/Correct Answer:\s*([A-D])/)?.[1] || "";
+  const e = text.match(/Explanation:\s*([\s\S]*)$/)?.[1]?.trim() || "";
+
+  const choices = a
+    .split(/\n(?=[A-D]\.)/)
+    .map(s => ({ letter: s[0], text: s.slice(2).trim() }))
+    .filter(x => x.letter && x.text);
+
+  return { q, choices, c, e };
+}
+
+async function typeset(nodes) {
+  if (!window.MathJax) return;
+  await MathJax.startup.promise;       // ✅ ensure MathJax ready
+  MathJax.typesetClear(nodes);
+  await MathJax.typesetPromise(nodes); // ✅ render
 }
 
 btn.onclick = async () => {
   btn.disabled = true;
 
-  // ⚠️ DO NOT USE innerHTML FOR CONTENT
-  output.replaceChildren();
+  // safe loading UI (fine to use innerHTML here since no LaTeX in it)
+  output.innerHTML = `<div class="loading">Generating…</div>`;
 
-  const loading = document.createElement("div");
-  loading.textContent = "Generating…";
-  output.appendChild(loading);
+  try {
+    const sectionEl = document.getElementById("section");
+    const topicEl = document.getElementById("topic");
+    const difficultyEl = document.getElementById("difficulty");
 
-  const resp = await fetch("/api/generate-question", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      section: "Math",
-      topic: "Algebra",
-      difficulty: "Medium"
-    })
-  });
+    const resp = await fetch(`/api/generate-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        section: sectionEl.value,
+        topic: topicEl.value,
+        difficulty: difficultyEl.value
+      })
+    });
 
-  const data = await resp.json();
-  const text = data.text;
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data?.error || `Request failed (${resp.status})`);
 
-  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)[1].trim();
-  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)[1].trim();
-  const c = text.match(/Correct Answer:\s*([A-D])/)[1];
-  const e = text.match(/Explanation:\s*([\s\S]*)$/)[1].trim();
+    const text = data.text || "";
+    const { q, choices, c, e } = parseModelText(text);
 
-  output.replaceChildren();
+    // ✅ Build output WITHOUT innerHTML for LaTeX-containing parts
+    output.replaceChildren();
 
-  const qDiv = document.createElement("div");
-  qDiv.className = "question-text";
-  qDiv.textContent = q;
-  output.appendChild(qDiv);
+    const qDiv = document.createElement("div");
+    qDiv.className = "question-text";
+    qDiv.textContent = q;
+    output.appendChild(qDiv);
 
-  const choices = a.split(/\n(?=[A-D]\.)/);
-  choices.forEach(line => {
-    const div = document.createElement("div");
-    div.className = "choice";
-    div.textContent = line;
-    div.onclick = () => {
-      document.querySelectorAll(".choice").forEach(el => {
-        el.classList.add(el.textContent.startsWith(c + ".") ? "correct" : "incorrect");
-      });
-      expl.style.display = "block";
-      typeset(expl);
-    };
-    output.appendChild(div);
-  });
+    const choiceEls = choices.map(ch => {
+      const div = document.createElement("div");
+      div.className = "choice";
+      div.dataset.letter = ch.letter;
 
-  const expl = document.createElement("div");
-  expl.style.display = "none";
-  expl.className = "question-text";
-  expl.textContent = `Correct Answer: ${c}\n\n${e}`;
-  output.appendChild(expl);
+      const strong = document.createElement("strong");
+      strong.textContent = `${ch.letter}. `;
+      div.appendChild(strong);
 
-  // ✅ THIS is where LaTeX rendering happens
-  await typeset(output);
+      const span = document.createElement("span");
+      span.textContent = ch.text;
+      div.appendChild(span);
 
-  btn.disabled = false;
+      output.appendChild(div);
+      return div;
+    });
+
+    const expl = document.createElement("div");
+    expl.id = "explanation";
+    expl.style.display = "none";
+    expl.style.marginTop = "20px";
+
+    const hr = document.createElement("hr");
+    expl.appendChild(hr);
+
+    const explText = document.createElement("div");
+    explText.className = "question-text";
+    explText.textContent = `Correct Answer: ${c}\n\n${e}`;
+    expl.appendChild(explText);
+
+    output.appendChild(expl);
+
+    // ✅ typeset question + choices now that they exist
+    await typeset([output]);
+
+    // click handlers (reveal explanation, grade choices)
+    choiceEls.forEach(el => {
+      el.onclick = async () => {
+        choiceEls.forEach(x => {
+          x.style.pointerEvents = "none";
+          x.classList.add(x.dataset.letter === c ? "correct" : "incorrect");
+        });
+
+        expl.style.display = "block";
+        await typeset([expl]);
+      };
+    });
+
+  } catch (err) {
+    output.replaceChildren();
+    const box = document.createElement("div");
+    box.className = "error";
+    box.textContent = String(err?.message || err);
+    output.appendChild(box);
+  } finally {
+    btn.disabled = false;
+  }
 };
 </script>
+
 </body>
 </html>
