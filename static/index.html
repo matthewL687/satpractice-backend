@@ -8,7 +8,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- MathJax -->
+<!-- ✅ MathJax config MUST come before the script -->
 <script>
   window.MathJax = {
     tex: {
@@ -17,10 +17,14 @@
     },
     options: {
       skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+    },
+    startup: {
+      typeset: false // we will typeset manually after injecting text
     }
   };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+<!-- defer ensures script loads after HTML parse -->
+<script id="MathJax-script" defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 
 <style>
 body {
@@ -153,8 +157,17 @@ function parseModelText(text) {
   return { q, choices, c, e };
 }
 
+async function ensureMathJaxReady() {
+  // Wait until MathJax finishes initializing (critical!)
+  if (!window.MathJax) return;
+  if (MathJax.startup?.promise) {
+    await MathJax.startup.promise;
+  }
+}
+
 async function typeset(nodes) {
   if (!window.MathJax) return;
+  await ensureMathJaxReady();
   MathJax.typesetClear(nodes);
   await MathJax.typesetPromise(nodes);
 }
@@ -175,14 +188,12 @@ btn.onclick = async () => {
     });
 
     const data = await resp.json();
-    if (!resp.ok) {
-      throw new Error(data?.error || `Request failed (${resp.status})`);
-    }
+    if (!resp.ok) throw new Error(data?.error || `Request failed (${resp.status})`);
 
     const text = data.text || "";
     const { q, choices, c, e } = parseModelText(text);
 
-    // Build DOM safely: use textContent for LaTeX-containing content
+    // Build DOM safely: use textContent so LaTeX stays as plain text
     output.innerHTML = "";
 
     const qDiv = document.createElement("div");
@@ -223,6 +234,7 @@ btn.onclick = async () => {
 
     output.appendChild(expl);
 
+    // ✅ Actually render LaTeX
     await typeset([output]);
 
     choiceEls.forEach(el => {
