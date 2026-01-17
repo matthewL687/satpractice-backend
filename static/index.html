@@ -3,103 +3,113 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MathJax Self-Test</title>
+<title>SAT Practice</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+
+<!-- MathJax -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$']],
+    displayMath: [['$$', '$$']]
+  },
+  startup: { typeset: false }
+};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 
 <style>
-body {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #f6f6f6;
-  padding: 40px;
-}
-.card {
-  background: white;
-  max-width: 800px;
-  margin: auto;
-  padding: 30px;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-}
-pre {
-  background: #eee;
-  padding: 12px;
-  white-space: pre-wrap;
-}
-button {
-  padding: 10px 14px;
-  margin-top: 12px;
-}
+body { font-family: Merriweather, serif; background:#fafafa; margin:0 }
+.container { max-width:900px; margin:40px auto }
+.card { background:#fff; padding:40px; border-radius:8px; border:1px solid #ddd }
+button { width:100%; padding:14px; margin-top:16px; background:#222; color:#fff; border:none }
+.choice { border:1px solid #ddd; padding:14px; margin-top:10px; cursor:pointer }
+.correct { background:#e8f5e9 }
+.incorrect { background:#fdecea }
+.question-text { white-space:pre-wrap; line-height:1.7 }
 </style>
-
-<!-- ✅ MathJax config FIRST -->
-<script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [['$', '$']],
-      displayMath: [['$$', '$$']]
-    },
-    startup: {
-      typeset: false
-    }
-  };
-</script>
-
-<!-- ✅ MathJax loader -->
-<script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 
 <body>
-
-<div class="card" id="box">
-  <h2>MathJax Self-Test</h2>
-
-  <p>This text should render math:</p>
-
-  <p>
-    Inline: $x^2 + 1$<br><br>
-    Display:
-    $$\frac{3x^2 - 2x + 1}{x - 4}$$
-  </p>
-
-  <button id="run">Run MathJax</button>
-
-  <h3>Status</h3>
-  <pre id="status"></pre>
+<div class="container">
+  <div class="card">
+    <button id="generate">Generate Question</button>
+    <div id="output" style="margin-top:30px;"></div>
+  </div>
 </div>
 
 <script>
-const status = document.getElementById("status");
-const box = document.getElementById("box");
+const output = document.getElementById("output");
+const btn = document.getElementById("generate");
 
-function log(msg) {
-  status.textContent += msg + "\n";
+async function typeset(node) {
+  await MathJax.startup.promise;
+  MathJax.typesetClear([node]);
+  await MathJax.typesetPromise([node]);
 }
 
-document.getElementById("run").onclick = async () => {
-  status.textContent = "";
+btn.onclick = async () => {
+  btn.disabled = true;
 
-  log("window.MathJax: " + (window.MathJax ? "PRESENT" : "MISSING"));
+  // ⚠️ DO NOT USE innerHTML FOR CONTENT
+  output.replaceChildren();
 
-  if (!window.MathJax) return;
+  const loading = document.createElement("div");
+  loading.textContent = "Generating…";
+  output.appendChild(loading);
 
-  log("MathJax.version: " + (MathJax.version || "unknown"));
+  const resp = await fetch("/api/generate-question", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      section: "Math",
+      topic: "Algebra",
+      difficulty: "Medium"
+    })
+  });
 
-  try {
-    if (MathJax.startup?.promise) {
-      log("Waiting for startup...");
-      await MathJax.startup.promise;
-      log("Startup ready.");
-    }
+  const data = await resp.json();
+  const text = data.text;
 
-    log("Calling typesetPromise...");
-    MathJax.typesetClear([box]);
-    await MathJax.typesetPromise([box]);
-    log("SUCCESS ✅ Math rendered");
-  } catch (e) {
-    log("FAILED ❌");
-    log(String(e));
-  }
+  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)[1].trim();
+  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)[1].trim();
+  const c = text.match(/Correct Answer:\s*([A-D])/)[1];
+  const e = text.match(/Explanation:\s*([\s\S]*)$/)[1].trim();
+
+  output.replaceChildren();
+
+  const qDiv = document.createElement("div");
+  qDiv.className = "question-text";
+  qDiv.textContent = q;
+  output.appendChild(qDiv);
+
+  const choices = a.split(/\n(?=[A-D]\.)/);
+  choices.forEach(line => {
+    const div = document.createElement("div");
+    div.className = "choice";
+    div.textContent = line;
+    div.onclick = () => {
+      document.querySelectorAll(".choice").forEach(el => {
+        el.classList.add(el.textContent.startsWith(c + ".") ? "correct" : "incorrect");
+      });
+      expl.style.display = "block";
+      typeset(expl);
+    };
+    output.appendChild(div);
+  });
+
+  const expl = document.createElement("div");
+  expl.style.display = "none";
+  expl.className = "question-text";
+  expl.textContent = `Correct Answer: ${c}\n\n${e}`;
+  output.appendChild(expl);
+
+  // ✅ THIS is where LaTeX rendering happens
+  await typeset(output);
+
+  btn.disabled = false;
 };
 </script>
-
 </body>
 </html>
