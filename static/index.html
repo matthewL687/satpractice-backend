@@ -1,3 +1,4 @@
+<!-- static/index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,7 +8,7 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- ✅ MathJax (robust CHTML build) -->
+<!-- MathJax -->
 <script>
   window.MathJax = {
     tex: {
@@ -37,6 +38,7 @@ header {
 .container {
   max-width: 900px;
   margin: 40px auto;
+  padding: 0 16px;
 }
 .card {
   background: white;
@@ -58,6 +60,7 @@ button {
 }
 button:disabled {
   background: #ccc;
+  cursor: not-allowed;
 }
 .question-text {
   white-space: pre-wrap;
@@ -72,9 +75,7 @@ button:disabled {
   cursor: pointer;
   transition: 0.15s;
 }
-.choice:hover {
-  background: #f0f0f0;
-}
+.choice:hover { background: #f0f0f0; }
 .choice.correct {
   background: #e8f5e9;
   border-color: #2e7d32;
@@ -88,11 +89,17 @@ button:disabled {
   font-style: italic;
   color: #666;
 }
+.error {
+  border: 1px solid #f3b0b0;
+  background: #fff3f3;
+  padding: 14px 16px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
 </style>
 </head>
 
 <body>
-
 <header>
   <h1>SAT Practice</h1>
 </header>
@@ -130,74 +137,115 @@ button:disabled {
 <script>
 const API_ORIGIN = location.origin;
 const output = document.getElementById("output");
+const btn = document.getElementById("generate");
 
-document.getElementById("generate").onclick = async () => {
-  output.innerHTML = `<div class="loading">Generating…</div>`;
-
-  const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      section: section.value,
-      topic: topic.value,
-      difficulty: difficulty.value
-    })
-  });
-
-  const data = await resp.json();
-  const text = data.text || "";
-
+function parseModelText(text) {
   const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)?.[1]?.trim() || "";
   const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)?.[1]?.trim() || "";
   const c = text.match(/Correct Answer:\s*([A-D])/)?.[1] || "";
   const e = text.match(/Explanation:\s*([\s\S]*)$/)?.[1]?.trim() || "";
 
-  const choices = a.split(/\n(?=[A-D]\.)/).map(s => ({
-    letter: s[0],
-    text: s.slice(2).trim()
-  }));
+  const choices = a
+    .split(/\n(?=[A-D]\.)/)
+    .map(s => ({ letter: s[0], text: s.slice(2).trim() }))
+    .filter(x => x.letter && x.text);
 
-  output.innerHTML = `
-    <div class="question-text">${q}</div>
+  return { q, choices, c, e };
+}
 
-    ${choices.map(ch => `
-      <div class="choice" data-letter="${ch.letter}">
-        <strong>${ch.letter}.</strong> ${ch.text}
-      </div>
-    `).join("")}
+async function typeset(nodes) {
+  if (!window.MathJax) return;
+  MathJax.typesetClear(nodes);
+  await MathJax.typesetPromise(nodes);
+}
 
-    <div id="explanation" style="display:none; margin-top:20px;">
-      <hr />
-      <div class="question-text">
-        <strong>Correct Answer:</strong> ${c}<br><br>
-        ${e}
-      </div>
-    </div>
-  `;
+btn.onclick = async () => {
+  output.innerHTML = `<div class="loading">Generating…</div>`;
+  btn.disabled = true;
 
-  // 🔁 Force MathJax render
-  if (window.MathJax) {
-    MathJax.typesetClear();
-    MathJax.typesetPromise([output]);
+  try {
+    const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        section: section.value,
+        topic: topic.value,
+        difficulty: difficulty.value
+      })
+    });
+
+    const data = await resp.json();
+    if (!resp.ok) {
+      throw new Error(data?.error || `Request failed (${resp.status})`);
+    }
+
+    const text = data.text || "";
+    const { q, choices, c, e } = parseModelText(text);
+
+    // Build DOM safely: use textContent for LaTeX-containing content
+    output.innerHTML = "";
+
+    const qDiv = document.createElement("div");
+    qDiv.className = "question-text";
+    qDiv.textContent = q;
+    output.appendChild(qDiv);
+
+    const choiceEls = [];
+    choices.forEach(ch => {
+      const div = document.createElement("div");
+      div.className = "choice";
+      div.dataset.letter = ch.letter;
+
+      const strong = document.createElement("strong");
+      strong.textContent = `${ch.letter}. `;
+      div.appendChild(strong);
+
+      const span = document.createElement("span");
+      span.textContent = ch.text;
+      div.appendChild(span);
+
+      output.appendChild(div);
+      choiceEls.push(div);
+    });
+
+    const expl = document.createElement("div");
+    expl.id = "explanation";
+    expl.style.display = "none";
+    expl.style.marginTop = "20px";
+
+    const hr = document.createElement("hr");
+    expl.appendChild(hr);
+
+    const explText = document.createElement("div");
+    explText.className = "question-text";
+    explText.textContent = `Correct Answer: ${c}\n\n${e}`;
+    expl.appendChild(explText);
+
+    output.appendChild(expl);
+
+    await typeset([output]);
+
+    choiceEls.forEach(el => {
+      el.onclick = async () => {
+        choiceEls.forEach(x => {
+          x.style.pointerEvents = "none";
+          x.classList.add(x.dataset.letter === c ? "correct" : "incorrect");
+        });
+
+        expl.style.display = "block";
+        await typeset([expl]);
+      };
+    });
+
+  } catch (err) {
+    output.innerHTML = "";
+    const box = document.createElement("div");
+    box.className = "error";
+    box.textContent = String(err?.message || err);
+    output.appendChild(box);
+  } finally {
+    btn.disabled = false;
   }
-
-  document.querySelectorAll(".choice").forEach(choice => {
-    choice.onclick = () => {
-      document.querySelectorAll(".choice").forEach(el => {
-        el.style.pointerEvents = "none";
-        el.classList.add(
-          el.dataset.letter === c ? "correct" : "incorrect"
-        );
-      });
-
-      const expl = document.getElementById("explanation");
-      expl.style.display = "block";
-
-      if (window.MathJax) {
-        MathJax.typesetPromise([expl]);
-      }
-    };
-  });
 };
 </script>
 
