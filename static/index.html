@@ -1,269 +1,175 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SAT Practice</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SAT Practice</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Merriweather', serif;
-      background-color: #fafafa;
-      color: #2a2a2a;
-      line-height: 1.65;
+<!-- MathJax -->
+<script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['$', '$']],
+      displayMath: [['$$', '$$']]
     }
-    header {
-      text-align: center;
-      padding: 70px 20px;
-      background: white;
-      border-bottom: 1px solid #eee;
-    }
-    h1 {
-      font-family: 'Libre Baskerville', serif;
-      font-size: 2.7rem;
-      margin-bottom: 10px;
-      font-weight: 700;
-    }
-    h2 {
-      font-size: 1.4rem;
-      font-weight: 300;
-      color: #555;
-      margin-top: 0;
-    }
-    .container {
-      width: min(950px, 90%);
-      margin: 50px auto;
-    }
-    .sat-practice-container {
-      background: white;
-      padding: 40px;
-      border-radius: 8px;
-      border: 1px solid #e5e5e5;
-      max-width: 800px;
-      margin: 0 auto;
-    }
-    .form-group { margin-bottom: 25px; }
-    .form-group label {
-      display: block;
-      font-weight: 600;
-      margin-bottom: 8px;
-      font-size: 1rem;
-    }
-    .form-group select {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-family: 'Merriweather', serif;
-      font-size: 1rem;
-    }
-    .generate-btn {
-      background: #2a2a2a;
-      color: white;
-      padding: 15px 40px;
-      border: none;
-      border-radius: 4px;
-      font-family: 'Libre Baskerville', serif;
-      font-size: 1.1rem;
-      cursor: pointer;
-      transition: 0.2s;
-      width: 100%;
-    }
-    .generate-btn:hover { background: #000; }
-    .generate-btn:disabled { background: #ccc; cursor: not-allowed; }
-    .question-container {
-      margin-top: 30px;
-      padding: 30px;
-      background: #f9f9f9;
-      border-radius: 8px;
-      border: 1px solid #e5e5e5;
-    }
-    .question-text {
-      white-space: pre-wrap;
-      line-height: 1.8;
-      font-size: 1.05rem;
-    }
-    .loading {
-      text-align: center;
-      padding: 40px;
-      font-style: italic;
-      color: #666;
-    }
-    .error {
-      color: #b00020;
-      font-weight: 600;
-    }
-  </style>
+  };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: 'Merriweather', serif;
+  background: #fafafa;
+}
+header {
+  text-align: center;
+  padding: 60px 20px;
+  background: white;
+  border-bottom: 1px solid #eee;
+}
+.container {
+  max-width: 850px;
+  margin: 40px auto;
+}
+.card {
+  background: white;
+  padding: 40px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+select, button {
+  width: 100%;
+  padding: 12px;
+  margin-top: 12px;
+}
+button {
+  background: #2a2a2a;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+button:disabled {
+  background: #ccc;
+}
+.question-text {
+  white-space: pre-wrap;
+  line-height: 1.7;
+}
+.choice {
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 14px;
+  margin: 12px 0;
+  cursor: pointer;
+}
+.choice:hover {
+  background: #f0f0f0;
+}
+.choice.correct {
+  background: #e8f5e9;
+  border-color: #2e7d32;
+}
+.choice.incorrect {
+  background: #fdecea;
+  border-color: #c62828;
+}
+</style>
 </head>
 
 <body>
+
 <header>
   <h1>SAT Practice</h1>
-  <h2>Select a section, topic, and difficulty</h2>
 </header>
 
 <div class="container">
-  <div class="sat-practice-container">
+  <div class="card">
+    <select id="section">
+      <option value="">Select Section</option>
+      <option value="Reading and Writing">Reading and Writing</option>
+      <option value="Math">Math</option>
+    </select>
 
-    <div class="form-group">
-      <label>SAT Section</label>
-      <select id="section-select">
-        <option value="">-- Select a Section --</option>
-        <option value="reading-writing">Reading and Writing</option>
-        <option value="math">Math</option>
-      </select>
-    </div>
+    <select id="topic">
+      <option value="">Select Topic</option>
+      <option>Algebra</option>
+      <option>Advanced Math</option>
+      <option>Problem-Solving and Data Analysis</option>
+      <option>Geometry and Trigonometry</option>
+    </select>
 
-    <div class="form-group">
-      <label>Topic</label>
-      <select id="topic-select" disabled></select>
-    </div>
+    <select id="difficulty">
+      <option>Easy</option>
+      <option selected>Medium</option>
+      <option>Hard</option>
+    </select>
 
-    <div class="form-group">
-      <label>Difficulty</label>
-      <select id="difficulty-select">
-        <option value="">-- Select Difficulty --</option>
-        <option value="Easy">Easy</option>
-        <option value="Medium" selected>Medium</option>
-        <option value="Hard">Hard</option>
-      </select>
-    </div>
+    <button id="generate">Generate Question</button>
 
-    <button id="generate-btn" class="generate-btn" disabled>
-      Generate Practice Question
-    </button>
-
-    <div id="question-display"></div>
+    <div id="output" style="margin-top:30px;"></div>
   </div>
 </div>
 
 <script>
-/**
- * ✅ API_ORIGIN logic (as requested)
- */
-const API_ORIGIN = location.hostname.endsWith("github.io")
-  ? "https://satpractice-coral.vercel.app"
-  : location.origin;
+const API_ORIGIN = location.origin;
+const output = document.getElementById("output");
 
-const topics = {
-  "reading-writing": [
-    "Craft and Structure",
-    "Information and Ideas",
-    "Standard English Conventions",
-    "Expression of Ideas"
-  ],
-  "math": [
-    "Algebra",
-    "Advanced Math",
-    "Problem-Solving and Data Analysis",
-    "Geometry and Trigonometry"
-  ]
-};
+document.getElementById("generate").onclick = async () => {
+  output.innerHTML = "Generating...";
 
-const sectionSelect = document.getElementById("section-select");
-const topicSelect = document.getElementById("topic-select");
-const difficultySelect = document.getElementById("difficulty-select");
-const generateBtn = document.getElementById("generate-btn");
-const displayDiv = document.getElementById("question-display");
-
-sectionSelect.onchange = () => {
-  const section = sectionSelect.value;
-  topicSelect.innerHTML = "";
-
-  if (!section) {
-    topicSelect.disabled = true;
-    generateBtn.disabled = true;
-    return;
-  }
-
-  topicSelect.disabled = false;
-  topics[section].forEach(t => {
-    const o = document.createElement("option");
-    o.value = t;
-    o.textContent = t;
-    topicSelect.appendChild(o);
+  const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      section: section.value,
+      topic: topic.value,
+      difficulty: difficulty.value
+    })
   });
 
-  updateButton();
-};
+  const { text } = await resp.json();
 
-topicSelect.onchange = updateButton;
-difficultySelect.onchange = updateButton;
+  const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)[1].trim();
+  const a = text.match(/Answer Choices:\s*([\s\S]*?)Correct Answer:/)[1].trim();
+  const c = text.match(/Correct Answer:\s*([A-D])/)[1];
+  const e = text.match(/Explanation:\s*([\s\S]*)$/)[1].trim();
 
-function updateButton() {
-  generateBtn.disabled = !(topicSelect.value && difficultySelect.value);
-}
+  const choices = a.split(/\n(?=[A-D]\.)/).map(s => ({
+    letter: s[0],
+    text: s.slice(2).trim()
+  }));
 
-function escapeHtml(str) {
-  return str
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
-
-generateBtn.onclick = async () => {
-  generateBtn.disabled = true;
-  displayDiv.innerHTML = `<div class="loading">Generating...</div>`;
-
-  try {
-    const resp = await fetch(`${API_ORIGIN}/api/generate-question`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        section: sectionSelect.value === "reading-writing"
-          ? "Reading and Writing"
-          : "Math",
-        topic: topicSelect.value,
-        difficulty: difficultySelect.value
-      })
-    });
-
-    const data = await resp.json();
-    if (!resp.ok) throw new Error(data.error || "Request failed");
-
-    const fullText = data.text || "";
-
-    const splitIndex = fullText.indexOf("Correct Answer");
-    const questionPart =
-      splitIndex !== -1 ? fullText.slice(0, splitIndex).trim() : fullText.trim();
-    const answerPart =
-      splitIndex !== -1 ? fullText.slice(splitIndex).trim() : "";
-
-    displayDiv.innerHTML = `
-      <div class="question-container">
-        <div class="question-text">${escapeHtml(questionPart)}</div>
-
-        <button id="reveal-btn" class="generate-btn" style="margin-top:20px;">
-          Show Answer & Explanation
-        </button>
-
-        <div id="answer-section" style="display:none; margin-top:20px;">
-          <hr />
-          <div class="question-text">
-            ${escapeHtml(answerPart || "No answer/explanation found.")}
-          </div>
-        </div>
+  output.innerHTML = `
+    <div class="question-text">${q}</div>
+    ${choices.map(x => `
+      <div class="choice" data-l="${x.letter}">
+        <strong>${x.letter}.</strong> ${x.text}
       </div>
-    `;
+    `).join("")}
+    <div id="explanation" style="display:none;margin-top:20px;">
+      <hr>
+      <strong>Correct Answer:</strong> ${c}<br><br>
+      ${e}
+    </div>
+  `;
 
-    document.getElementById("reveal-btn").onclick = () => {
-      document.getElementById("answer-section").style.display = "block";
-      document.getElementById("reveal-btn").style.display = "none";
+  document.querySelectorAll(".choice").forEach(el => {
+    el.onclick = () => {
+      document.querySelectorAll(".choice").forEach(c2 => {
+        c2.style.pointerEvents = "none";
+        c2.classList.add(
+          c2.dataset.l === c ? "correct" : "incorrect"
+        );
+      });
+      document.getElementById("explanation").style.display = "block";
+      MathJax.typesetPromise();
     };
+  });
 
-  } catch (err) {
-    displayDiv.innerHTML = `
-      <div class="question-container error">
-        ${escapeHtml(String(err))}
-      </div>
-    `;
-  } finally {
-    generateBtn.disabled = false;
-  }
+  MathJax.typesetPromise();
 };
 </script>
 
