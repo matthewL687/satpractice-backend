@@ -7,102 +7,36 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
 
-<!-- ✅ MathJax (manual typeset, reliable) -->
+<!-- ✅ MathJax (manual typeset) -->
 <script>
   window.MathJax = {
-    tex: {
-      inlineMath: [['$', '$']],
-      displayMath: [['$$', '$$']]
-    },
-    options: {
-      skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-    },
+    tex: { inlineMath: [['$', '$']], displayMath: [['$$', '$$']] },
+    options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre'] },
     startup: { typeset: false }
   };
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 
 <style>
-body {
-  margin: 0;
-  font-family: 'Merriweather', serif;
-  background: #fafafa;
-  color: #2a2a2a;
-}
-header {
-  text-align: center;
-  padding: 60px 20px;
-  background: white;
-  border-bottom: 1px solid #eee;
-}
-.container {
-  max-width: 900px;
-  margin: 40px auto;
-  padding: 0 16px;
-}
-.card {
-  background: white;
-  padding: 40px;
-  border-radius: 8px;
-  border: 1px solid #ddd;
-}
-select, button {
-  width: 100%;
-  padding: 12px;
-  margin-top: 12px;
-  font-family: 'Merriweather', serif;
-}
-button {
-  background: #2a2a2a;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
-}
-.question-text {
-  white-space: pre-wrap;
-  line-height: 1.7;
-  font-size: 1.05rem;
-}
-.choice {
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  padding: 14px 16px;
-  margin: 12px 0;
-  cursor: pointer;
-  transition: 0.15s;
-}
-.choice:hover { background: #f0f0f0; }
-.choice.correct {
-  background: #e8f5e9;
-  border-color: #2e7d32;
-}
-.choice.incorrect {
-  background: #fdecea;
-  border-color: #c62828;
-}
-.loading {
-  text-align: center;
-  font-style: italic;
-  color: #666;
-}
-.error {
-  border: 1px solid #f3b0b0;
-  background: #fff3f3;
-  padding: 14px 16px;
-  border-radius: 6px;
-  white-space: pre-wrap;
-}
+body { margin:0; font-family:'Merriweather', serif; background:#fafafa; color:#2a2a2a; }
+header { text-align:center; padding:60px 20px; background:#fff; border-bottom:1px solid #eee; }
+.container { max-width:900px; margin:40px auto; padding:0 16px; }
+.card { background:#fff; padding:40px; border-radius:8px; border:1px solid #ddd; }
+select, button { width:100%; padding:12px; margin-top:12px; font-family:'Merriweather', serif; }
+button { background:#2a2a2a; color:#fff; border:none; cursor:pointer; }
+button:disabled { background:#ccc; cursor:not-allowed; }
+.question-text { white-space:pre-wrap; line-height:1.7; font-size:1.05rem; }
+.choice { border:1px solid #ddd; border-radius:6px; padding:14px 16px; margin:12px 0; cursor:pointer; transition:.15s; }
+.choice:hover { background:#f0f0f0; }
+.choice.correct { background:#e8f5e9; border-color:#2e7d32; }
+.choice.incorrect { background:#fdecea; border-color:#c62828; }
+.loading { text-align:center; font-style:italic; color:#666; }
+.error { border:1px solid #f3b0b0; background:#fff3f3; padding:14px 16px; border-radius:6px; white-space:pre-wrap; }
 </style>
 </head>
 
 <body>
-<header>
-  <h1>SAT Practice</h1>
-</header>
+<header><h1>SAT Practice</h1></header>
 
 <div class="container">
   <div class="card">
@@ -112,12 +46,8 @@ button:disabled {
       <option value="Math">Math</option>
     </select>
 
-    <select id="topic">
+    <select id="topic" disabled>
       <option value="">Select Topic</option>
-      <option>Algebra</option>
-      <option>Advanced Math</option>
-      <option>Problem-Solving and Data Analysis</option>
-      <option>Geometry and Trigonometry</option>
     </select>
 
     <select id="difficulty">
@@ -126,7 +56,7 @@ button:disabled {
       <option>Hard</option>
     </select>
 
-    <button id="generate">Generate Question</button>
+    <button id="generate" disabled>Generate Question</button>
 
     <div id="output" style="margin-top:30px;"></div>
   </div>
@@ -134,8 +64,67 @@ button:disabled {
 
 <script>
 const API_ORIGIN = location.origin;
-const output = document.getElementById("output");
+const sectionEl = document.getElementById("section");
+const topicEl = document.getElementById("topic");
+const difficultyEl = document.getElementById("difficulty");
 const btn = document.getElementById("generate");
+const output = document.getElementById("output");
+
+// ✅ Put your real RW topics here (edit as needed)
+const TOPICS_BY_SECTION = {
+  "Math": [
+    "Algebra",
+    "Advanced Math",
+    "Problem-Solving and Data Analysis",
+    "Geometry and Trigonometry"
+  ],
+  "Reading and Writing": [
+    "Information and Ideas",
+    "Craft and Structure",
+    "Expression of Ideas",
+    "Standard English Conventions"
+  ]
+};
+
+function setTopicOptions(section) {
+  topicEl.replaceChildren();
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Select Topic";
+  topicEl.appendChild(placeholder);
+
+  const topics = TOPICS_BY_SECTION[section] || [];
+  topics.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    topicEl.appendChild(opt);
+  });
+
+  topicEl.disabled = topics.length === 0;
+  topicEl.value = "";
+  updateGenerateEnabled();
+}
+
+function updateGenerateEnabled() {
+  const ok = sectionEl.value && topicEl.value && difficultyEl.value;
+  btn.disabled = !ok;
+}
+
+sectionEl.addEventListener("change", () => {
+  setTopicOptions(sectionEl.value);
+});
+
+topicEl.addEventListener("change", updateGenerateEnabled);
+difficultyEl.addEventListener("change", updateGenerateEnabled);
+
+async function typeset(nodes) {
+  if (!window.MathJax) return;
+  await MathJax.startup.promise;
+  MathJax.typesetClear(nodes);
+  await MathJax.typesetPromise(nodes);
+}
 
 function parseModelText(text) {
   const q = text.match(/Question:\s*([\s\S]*?)Answer Choices:/)?.[1]?.trim() || "";
@@ -151,17 +140,8 @@ function parseModelText(text) {
   return { q, choices, c, e };
 }
 
-async function typeset(nodes) {
-  if (!window.MathJax) return;
-  await MathJax.startup.promise;     // ✅ wait until MathJax ready
-  MathJax.typesetClear(nodes);
-  await MathJax.typesetPromise(nodes);
-}
-
 btn.onclick = async () => {
   btn.disabled = true;
-
-  // loading can be innerHTML (no LaTeX here)
   output.innerHTML = `<div class="loading">Generating…</div>`;
 
   try {
@@ -169,9 +149,9 @@ btn.onclick = async () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        section: document.getElementById("section").value,
-        topic: document.getElementById("topic").value,
-        difficulty: document.getElementById("difficulty").value
+        section: sectionEl.value,
+        topic: topicEl.value,
+        difficulty: difficultyEl.value
       })
     });
 
@@ -181,16 +161,14 @@ btn.onclick = async () => {
     const text = data.text || "";
     const { q, choices, c, e } = parseModelText(text);
 
-    // ✅ Build DOM safely: use textContent for LaTeX
+    // ✅ DOM build (no innerHTML for LaTeX content)
     output.replaceChildren();
 
-    // Question
     const qDiv = document.createElement("div");
     qDiv.className = "question-text";
     qDiv.textContent = q;
     output.appendChild(qDiv);
 
-    // Choices
     const choiceEls = [];
     for (const ch of choices) {
       const div = document.createElement("div");
@@ -209,7 +187,6 @@ btn.onclick = async () => {
       choiceEls.push(div);
     }
 
-    // Explanation (hidden)
     const expl = document.createElement("div");
     expl.id = "explanation";
     expl.style.display = "none";
@@ -225,17 +202,14 @@ btn.onclick = async () => {
 
     output.appendChild(expl);
 
-    // ✅ Render LaTeX in question + choices
     await typeset([output]);
 
-    // Click behavior (grade + reveal explanation)
-    choiceEls.forEach(choiceEl => {
-      choiceEl.onclick = async () => {
-        choiceEls.forEach(el => {
-          el.style.pointerEvents = "none";
-          el.classList.add(el.dataset.letter === c ? "correct" : "incorrect");
+    choiceEls.forEach(el => {
+      el.onclick = async () => {
+        choiceEls.forEach(x => {
+          x.style.pointerEvents = "none";
+          x.classList.add(x.dataset.letter === c ? "correct" : "incorrect");
         });
-
         expl.style.display = "block";
         await typeset([expl]);
       };
@@ -248,10 +222,13 @@ btn.onclick = async () => {
     box.textContent = String(err?.message || err);
     output.appendChild(box);
   } finally {
-    btn.disabled = false;
+    // re-enable only if selections still valid
+    updateGenerateEnabled();
   }
 };
-</script>
 
+// initialize topics on load (keeps topic disabled until section chosen)
+setTopicOptions(sectionEl.value);
+</script>
 </body>
 </html>
